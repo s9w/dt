@@ -276,7 +276,7 @@ namespace dt {
 				constexpr int decimal_places = 1;
 				const ResultTable table = get_result_table(lresults);
 
-				printf("%*s: %-*s %-*s %-*s %-*s\n",
+				printf("%*s  %-*s %-*s %-*s %-*s\n",
 					name_col_len, "",
 					table.max_median_len, "median [ms]",
 					table.max_avg_len, "average [ms]",
