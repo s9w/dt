@@ -215,11 +215,11 @@ namespace dt {
 			) -> std::string {
 				char value_buffer[50];
 				if (eval_type == EvalType::RelStdDev) {
-					sprintf_s(value_buffer, "%5.1f%%", static_cast<float_type>(100.0) * get_result_eval(lresults[i], eval_type));
+					sprintf_s(value_buffer, "%5.1f", static_cast<float_type>(100.0) * get_result_eval(lresults[i], eval_type));
 					return std::string(value_buffer);
 				}
 				char change_buffer[50];
-				sprintf_s(value_buffer, "%5.1fms", get_result_eval(lresults[i], eval_type));
+				sprintf_s(value_buffer, "%5.1f", get_result_eval(lresults[i], eval_type));
 				if (i != 0) {
 					const float_type baseline = get_result_eval(lresults[0], eval_type);
 					const float_type diff = get_result_eval(lresults[i], eval_type) - baseline;
@@ -278,10 +278,10 @@ namespace dt {
 
 				printf("%*s: %-*s %-*s %-*s %-*s\n",
 					name_col_len, "",
-					table.max_median_len, "median",
-					table.max_avg_len, "average",
-					table.max_max_len, "max",
-					table.max_stddev_len, "std dev"
+					table.max_median_len, "median [ms]",
+					table.max_avg_len, "average [ms]",
+					table.max_max_len, "max [ms]",
+					table.max_stddev_len, "std dev [%]"
 				);
 				for (int i = 0; i < lresults.size(); ++i) {
 					const ZoneResult& result = lresults[i];
