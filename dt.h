@@ -44,6 +44,7 @@ namespace dt {
 		size_t target_zone = 0;
 		std::chrono::high_resolution_clock::time_point t0;
 		int recorded_slices = 0;
+		int warmup_runs_left = 0;
 	} dt_state;
 
 	typedef void (*DoneCallback)(const Results& results);
@@ -52,6 +53,7 @@ namespace dt {
 	struct Config {
 		ReportMode report_mode = ReportMode::ConsoleOut;
 		int target_sample_count = 10;
+		int warmup_runs = 0;
 		DoneCallback done_cb = nullptr;
 
 	} config;
@@ -309,10 +311,15 @@ namespace dt {
       else if (dt_state.status == Status::Starting) {
          dt_state.target_zone = 0;
          dt_state.recorded_slices = 0;
+			dt_state.warmup_runs_left = config.warmup_runs;
 			dt_state.zones[0].frame_times.clear();
          dt_state.status = Status::Measuring;
       }
       else if (dt_state.status == Status::Measuring) {
+			if (dt_state.warmup_runs_left > 0) {
+				--dt_state.warmup_runs_left;
+				return;
+			}
          details::record_slice(dt_state, time_delta_ms);
          if (details::is_sample_target_reached(dt_state)) {
             details::start_next_zone_measurement(dt_state);
@@ -375,6 +382,11 @@ namespace dt {
 
 	auto set_sample_count(const int sample_count) -> void {
 		config.target_sample_count = sample_count;
+	}
+
+
+	auto set_warmup_runs(const int warmup_runs) -> void {
+		config.warmup_runs = warmup_runs;
 	}
 
 
