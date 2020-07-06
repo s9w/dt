@@ -173,12 +173,19 @@ namespace dt {
 				const ZoneResult& result,
 				const EvalType& eval_type
 			) -> float_type {
-				if (eval_type == EvalType::Median)
+				switch (eval_type) {
+				case EvalType::Median:
 					return result.median;
-				else if (eval_type == EvalType::Average)
+					break;
+				case EvalType::Average:
 					return result.average;
-				else
+					break;
+				case EvalType::Max:
 					return result.max_time;
+					break;
+				default:
+					return 0.0;
+				}
 			}
 
 
