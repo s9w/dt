@@ -23,7 +23,7 @@ namespace dt {
 		std::vector<float_type> sorted_times;
 		float_type median;
 		float_type average;
-		float_type max_time;
+		float_type worst_time;
 		float_type std_dev;
 	};
 
@@ -154,7 +154,7 @@ namespace dt {
 				zr.median = get_median(zr.sorted_times);
 				zr.average = get_average(zr.sorted_times);
 				zr.std_dev = get_std_dev(zr.sorted_times, zr.average);
-				zr.max_time = zr.sorted_times.back();
+				zr.worst_time = zr.sorted_times.back();
 				local_results.emplace_back(zr);
 			}
 			return local_results;
@@ -185,7 +185,7 @@ namespace dt {
 			}
 
 
-			enum class EvalType { Median, Average, Max, RelStdDev };
+			enum class EvalType { Median, Average, Worst, RelStdDev };
 
 
 			[[nodiscard]] auto get_result_eval(
@@ -199,8 +199,8 @@ namespace dt {
 				case EvalType::Average:
 					return result.average;
 					break;
-				case EvalType::Max:
-					return result.max_time;
+				case EvalType::Worst:
+					return result.worst_time;
 					break;
 				case EvalType::RelStdDev:
 					return result.std_dev / result.average;
@@ -290,11 +290,11 @@ namespace dt {
 			struct ResultTable {
 				std::vector<std::string> median_cells;
 				std::vector<std::string> average_cells;
-				std::vector<std::string> max_cells;
+				std::vector<std::string> worst_cells;
 				std::vector<std::string> std_dev_cells;
 				int max_median_len = 3;
 				int max_avg_len = 3;
-				int max_max_len = 3;
+				int max_worst_len = 3;
 				int max_stddev_len = 3;
 			};
 
@@ -310,9 +310,9 @@ namespace dt {
 					table.average_cells.emplace_back(avg_cell);
 					table.max_avg_len = std::max(table.max_avg_len, static_cast<int>(avg_cell.length()));
 
-					const std::string max_cell = get_cell_str(lresults, i, EvalType::Max);
-					table.max_cells.emplace_back(max_cell);
-					table.max_max_len = std::max(table.max_max_len, static_cast<int>(max_cell.length()));
+					const std::string worst_cell = get_cell_str(lresults, i, EvalType::Worst);
+					table.worst_cells.emplace_back(worst_cell);
+					table.max_worst_len = std::max(table.max_worst_len, static_cast<int>(worst_cell.length()));
 
 					const std::string rel_std_dev_cell = get_cell_str(lresults, i, EvalType::RelStdDev);
 					table.std_dev_cells.emplace_back(rel_std_dev_cell);
@@ -334,7 +334,7 @@ namespace dt {
 					name_col_len, "",
 					table.max_median_len, "median [ms]",
 					table.max_avg_len, "mean [ms]",
-					table.max_max_len, "max [ms]",
+					table.max_worst_len, "worst [ms]",
 					table.max_stddev_len, "std dev [%]"
 				);
 				for (int i = 0; i < lresults.size(); ++i) {
@@ -346,7 +346,7 @@ namespace dt {
 					printf("%-*s", name_col_len, name_col.c_str());
 					printf(" %-*s", table.max_median_len, table.median_cells[i].c_str());
 					printf(" %-*s", table.max_avg_len, table.average_cells[i].c_str());
-					printf(" %-*s", table.max_max_len, table.max_cells[i].c_str());
+					printf(" %-*s", table.max_worst_len, table.worst_cells[i].c_str());
 					printf(" %-*s", table.max_stddev_len, table.std_dev_cells[i].c_str());
 					printf("\n");
 				}
