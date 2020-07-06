@@ -23,6 +23,7 @@ namespace dt {
 		float_type median;
 		float_type average;
 		float_type max_time;
+		float_type std_dev;
 	};
 
 	using Results = std::vector<ZoneResult>;
@@ -126,6 +127,20 @@ namespace dt {
       }
 
 
+		// This is bessel-corrected!
+		[[nodiscard]] auto get_std_dev(
+			std::vector<float_type>& vec,
+			const float_type mean
+		) -> float_type{
+			float_type sigma = 0.0;
+			for (const float_type value : vec) {
+				const float_type term = value - mean;
+				sigma += term * term;
+			}
+			return sqrt(sigma / (vec.size() - static_cast<float_type>(1.0)));
+		}
+
+
 		[[nodiscard]] auto get_results(const std::vector<Zone>& zones) -> Results {
 			Results local_results;
 			for(const Zone& zone : zones){
@@ -135,6 +150,7 @@ namespace dt {
 				std::sort(std::begin(zr.sorted_times), std::end(zr.sorted_times));
 				zr.median = get_median(zr.sorted_times);
 				zr.average = get_average(zr.sorted_times);
+				zr.std_dev = get_std_dev(zr.sorted_times, zr.average);
 				zr.max_time = zr.sorted_times.back();
 				local_results.emplace_back(zr);
 			}
@@ -166,7 +182,7 @@ namespace dt {
 			}
 
 
-			enum class EvalType { Median, Average, Max };
+			enum class EvalType { Median, Average, Max, RelStdDev };
 
 
 			[[nodiscard]] auto get_result_eval(
@@ -183,6 +199,9 @@ namespace dt {
 				case EvalType::Max:
 					return result.max_time;
 					break;
+				case EvalType::RelStdDev:
+					return result.std_dev / result.average;
+					break;
 				default:
 					return 0.0;
 				}
@@ -194,16 +213,20 @@ namespace dt {
 				const int i,
 				const EvalType& eval_type
 			) -> std::string {
-				char time_buffer[50];
+				char value_buffer[50];
+				if (eval_type == EvalType::RelStdDev) {
+					sprintf_s(value_buffer, "%5.1f%%", static_cast<float_type>(100.0) * get_result_eval(lresults[i], eval_type));
+					return std::string(value_buffer);
+				}
 				char change_buffer[50];
-				sprintf_s(time_buffer, "%5.1fms", get_result_eval(lresults[i], eval_type));
+				sprintf_s(value_buffer, "%5.1fms", get_result_eval(lresults[i], eval_type));
 				if (i != 0) {
 					const float_type baseline = get_result_eval(lresults[0], eval_type);
 					const float_type diff = get_result_eval(lresults[i], eval_type) - baseline;
 					const float_type improv_percent = static_cast<float_type>(100.0) * diff / baseline;
 					sprintf_s(change_buffer, "(%+4.1f%%)", improv_percent);
 				}
-            std::string str(time_buffer);
+            std::string str(value_buffer);
             str += " ";
 				if (i != 0)
 					str += change_buffer;
@@ -215,9 +238,11 @@ namespace dt {
 				std::vector<std::string> median_cells;
 				std::vector<std::string> average_cells;
 				std::vector<std::string> max_cells;
+				std::vector<std::string> std_dev_cells;
 				int max_median_len = 3;
 				int max_avg_len = 3;
 				int max_max_len = 3;
+				int max_stddev_len = 3;
 			};
 
 
@@ -235,6 +260,10 @@ namespace dt {
 					const std::string max_cell = get_cell_str(lresults, i, EvalType::Max);
 					table.max_cells.emplace_back(max_cell);
 					table.max_max_len = std::max(table.max_max_len, static_cast<int>(max_cell.length()));
+
+					const std::string rel_std_dev_cell = get_cell_str(lresults, i, EvalType::RelStdDev);
+					table.std_dev_cells.emplace_back(rel_std_dev_cell);
+					table.max_stddev_len = std::max(table.max_stddev_len, static_cast<int>(rel_std_dev_cell.length()));
 				}
 				return table;
 			}
@@ -247,7 +276,13 @@ namespace dt {
 				constexpr int decimal_places = 1;
 				const ResultTable table = get_result_table(lresults);
 
-				printf("%*s: %-*s %-*s %-*s\n", name_col_len, "", table.max_median_len, "median", table.max_avg_len, "average", table.max_max_len, "max");
+				printf("%*s: %-*s %-*s %-*s %-*s\n",
+					name_col_len, "",
+					table.max_median_len, "median",
+					table.max_avg_len, "average",
+					table.max_max_len, "max",
+					table.max_stddev_len, "std dev"
+				);
 				for (int i = 0; i < lresults.size(); ++i) {
 					const ZoneResult& result = lresults[i];
 					std::string name_col = "all";
@@ -257,6 +292,7 @@ namespace dt {
 					printf(" %-*s", table.max_median_len, table.median_cells[i].c_str());
 					printf(" %-*s", table.max_avg_len, table.average_cells[i].c_str());
 					printf(" %-*s", table.max_max_len, table.max_cells[i].c_str());
+					printf(" %-*s", table.max_stddev_len, table.std_dev_cells[i].c_str());
 					printf("\n");
 				}
 			}
