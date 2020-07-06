@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm> // for std::sort(), std::max()
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -139,7 +140,7 @@ namespace dt {
 				const float_type term = value - mean;
 				sigma += term * term;
 			}
-			return sqrt(sigma / (vec.size() - static_cast<float_type>(1.0)));
+			return std::sqrt(sigma / (vec.size() - static_cast<float_type>(1.0)));
 		}
 
 
@@ -210,25 +211,75 @@ namespace dt {
 			}
 
 
+			template<class T>
+			[[nodiscard]] auto auto_get_digits_before_point(const T num) -> int {
+				if (std::abs(num) < static_cast<float_type>(1.0))
+					return 0;
+				return std::max(static_cast<int>(std::log10(std::abs(num))) + 1, 0);
+			}
+
+
+			[[nodiscard]] auto get_fractional_string(
+				const float_type num,
+				const int digits
+			) -> std::string {
+				float_type integral;
+				const float_type fractional = std::modf(num, &integral);
+				const float_type x = fractional * std::pow(static_cast<float_type>(10.0), digits);
+				const int i = static_cast<int>(std::round(x));
+				std::string s = std::to_string(i);
+				s.resize(digits, '0');
+				return s;
+			}
+
+
+			[[nodiscard]] auto get_num_str(
+				const float_type num,
+				const int significant_digits,
+				const bool with_sign
+			) -> std::string {
+				std::string s;
+				if(with_sign)
+					s += num < static_cast<float_type>(0.0) ? "-" : "+";
+				const float_type abs_num = std::abs(num);
+				
+				{
+					const int whole_rounded = static_cast<int>(std::round(abs_num));
+					const int rounded_predot_digits = auto_get_digits_before_point(whole_rounded);
+					if (rounded_predot_digits >= significant_digits) {
+						s += std::to_string(whole_rounded);
+						return s;
+					}
+				}
+
+				const int predot_digits = auto_get_digits_before_point(abs_num);
+				s += std::to_string(static_cast<int>(abs_num));
+
+				const int digits_left = significant_digits - predot_digits;
+				if (digits_left > 0) {
+					s += ".";
+					s += get_fractional_string(abs_num, digits_left);
+				}
+
+				return s;
+			}
+
+
 			[[nodiscard]] auto get_cell_str(
 				const Results& lresults,
 				const int i,
 				const EvalType& eval_type
 			) -> std::string {
-				char value_buffer[50];
-				if (eval_type == EvalType::RelStdDev) {
-					sprintf_s(value_buffer, "%5.1f", static_cast<float_type>(100.0) * get_result_eval(lresults[i], eval_type));
-					return std::string(value_buffer);
-				}
-				char change_buffer[50];
-				sprintf_s(value_buffer, "%5.1f", get_result_eval(lresults[i], eval_type));
+				if (eval_type == EvalType::RelStdDev)
+					return get_num_str(static_cast<float_type>(100.0) * get_result_eval(lresults[i], eval_type), 3, false);
+				std::string change_buffer;
 				if (i != 0) {
 					const float_type baseline = get_result_eval(lresults[0], eval_type);
 					const float_type diff = get_result_eval(lresults[i], eval_type) - baseline;
 					const float_type improv_percent = static_cast<float_type>(100.0) * diff / baseline;
-					sprintf_s(change_buffer, "(%+4.1f%%)", improv_percent);
+					change_buffer = "(" + get_num_str(improv_percent, 2, true) + "%)";
 				}
-            std::string str(value_buffer);
+				std::string str = get_num_str(get_result_eval(lresults[i], eval_type), 3, false);
             str += " ";
 				if (i != 0)
 					str += change_buffer;
