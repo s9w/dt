@@ -326,13 +326,14 @@ namespace dt {
 				const char* wo_prefix = "w/o ";
 				int name_col_len = get_max_zone_name_len(lresults, 3);
 				name_col_len += static_cast<int>(strlen(wo_prefix));
+				name_col_len += 1; // for :
 				constexpr int decimal_places = 1;
 				const ResultTable table = get_result_table(lresults);
 
-				printf("%*s  %-*s %-*s %-*s %-*s\n",
+				printf("%*s %-*s %-*s %-*s %-*s\n",
 					name_col_len, "",
 					table.max_median_len, "median [ms]",
-					table.max_avg_len, "average [ms]",
+					table.max_avg_len, "mean [ms]",
 					table.max_max_len, "max [ms]",
 					table.max_stddev_len, "std dev [%]"
 				);
@@ -341,7 +342,8 @@ namespace dt {
 					std::string name_col = "all";
 					if (i != 0)
 						name_col = wo_prefix + result.name;
-					printf("%-*s:", name_col_len, name_col.c_str());
+					name_col += ":";
+					printf("%-*s", name_col_len, name_col.c_str());
 					printf(" %-*s", table.max_median_len, table.median_cells[i].c_str());
 					printf(" %-*s", table.max_avg_len, table.average_cells[i].c_str());
 					printf(" %-*s", table.max_max_len, table.max_cells[i].c_str());
