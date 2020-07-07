@@ -30,7 +30,8 @@ namespace dt {
 	inline Results results;
 
 	enum class Status { GatheringZones, Ready, Starting, Measuring, Evaluating };
-	enum class ReportMode { JustEval, ConsoleOut };
+	enum class ReportOutMode { JustEval, ConsoleOut };
+	enum class ReportTimeMode { Ms, Fps };
 
 	struct Zone {
 		std::string name;
@@ -49,7 +50,8 @@ namespace dt {
 	typedef void (*DoneCallback)(const Results& results);
 
 	inline struct Config {
-		ReportMode report_mode = ReportMode::ConsoleOut;
+		ReportOutMode report_out_mode = ReportOutMode::ConsoleOut;
+		ReportTimeMode report_time_mode = ReportTimeMode::Ms;
 		int target_sample_count = 100;
 		int warmup_runs = 10;
 		DoneCallback done_cb = nullptr;
@@ -196,24 +198,23 @@ namespace dt {
 
 			[[nodiscard]] constexpr auto get_result_eval(
 				const ZoneResult& result,
-				const EvalType& eval_type
+				const EvalType eval_type,
+				const ReportTimeMode time_mode
 			) -> float_type {
-				switch (eval_type) {
-				case EvalType::Median:
-					return result.median;
-					break;
-				case EvalType::Mean:
-					return result.mean;
-					break;
-				case EvalType::Worst:
-					return result.worst_time;
-					break;
-				case EvalType::StdDev:
+				if (eval_type == EvalType::StdDev)
 					return result.std_dev;
-					break;
-				default:
-					return 0.0;
-				}
+				float_type ms_value = static_cast<float_type>(0.0);
+				if (eval_type == EvalType::Median)
+					ms_value = result.median;
+				else if (eval_type == EvalType::Mean)
+					ms_value = result.mean;
+				else if (eval_type == EvalType::Worst)
+					ms_value = result.worst_time;
+				
+				if (time_mode == ReportTimeMode::Ms)
+					return ms_value;
+				else
+					return static_cast<float_type>(1000.0) / ms_value;
 			}
 
 
@@ -282,16 +283,17 @@ namespace dt {
 			[[nodiscard]] inline auto get_cell_str(
 				const Results& lresults,
 				const int i,
-				const EvalType& eval_type
+				const EvalType& eval_type,
+				const ReportTimeMode time_mode
 			) -> std::string {
-				const float_type value = get_result_eval(lresults[i], eval_type);
+				const float_type value = get_result_eval(lresults[i], eval_type, time_mode);
 				if (eval_type == EvalType::StdDev)
 					return get_num_str(get_percentage(value, lresults[i].mean), 3, false);
 				std::string cell_str = get_num_str(value, 3, false);
 				if (i == 0)
 					return cell_str;
 
-				const float_type baseline = get_result_eval(lresults[0], eval_type);
+				const float_type baseline = get_result_eval(lresults[0], eval_type, time_mode);
 				const float_type diff = value - baseline;
 				const float_type improv_percent = get_percentage(diff, baseline);
 				cell_str += " (" + get_num_str(improv_percent, 2, true) + "%)";
@@ -311,22 +313,25 @@ namespace dt {
 			};
 
 
-			[[nodiscard]] inline auto get_result_table(const Results& lresults) -> ResultTable {
+			[[nodiscard]] inline auto get_result_table(
+				const Results& lresults,
+				const ReportTimeMode time_mode
+			) -> ResultTable {
 				ResultTable table;
 				for (int i = 0; i < lresults.size(); ++i) {
-					const std::string median_cell = get_cell_str(lresults, i, EvalType::Median);
+					const std::string median_cell = get_cell_str(lresults, i, EvalType::Median, time_mode);
 					table.median_cells.emplace_back(median_cell);
 					table.max_median_len = std::max(table.max_median_len, static_cast<int>(median_cell.length()));
 
-					const std::string mean_cell = get_cell_str(lresults, i, EvalType::Mean);
+					const std::string mean_cell = get_cell_str(lresults, i, EvalType::Mean, time_mode);
 					table.mean_cells.emplace_back(mean_cell);
 					table.max_mean_len = std::max(table.max_mean_len, static_cast<int>(mean_cell.length()));
 
-					const std::string worst_cell = get_cell_str(lresults, i, EvalType::Worst);
+					const std::string worst_cell = get_cell_str(lresults, i, EvalType::Worst, time_mode);
 					table.worst_cells.emplace_back(worst_cell);
 					table.max_worst_len = std::max(table.max_worst_len, static_cast<int>(worst_cell.length()));
 
-					const std::string rel_std_dev_cell = get_cell_str(lresults, i, EvalType::StdDev);
+					const std::string rel_std_dev_cell = get_cell_str(lresults, i, EvalType::StdDev, time_mode);
 					table.std_dev_cells.emplace_back(rel_std_dev_cell);
 					table.max_stddev_len = std::max(table.max_stddev_len, static_cast<int>(rel_std_dev_cell.length()));
 				}
@@ -334,20 +339,33 @@ namespace dt {
 			}
 
 
-			inline auto print_results(const Results& lresults) -> void {
+			inline auto get_united_str(const std::string& description) -> std::string {
+				std::string s = description;
+				if (config.report_time_mode == ReportTimeMode::Fps)
+					s += "[fps]";
+				else
+					s += "[ms]";
+				return s;
+			}
+
+
+			inline auto print_results(
+				const Results& lresults,
+				const ReportTimeMode time_mode
+			) -> void {
 				const char* wo_prefix = "w/o ";
 				int name_col_len = get_max_zone_name_len(lresults, 3);
 				name_col_len += static_cast<int>(strlen(wo_prefix));
 				name_col_len += 1; // for :
 				constexpr int decimal_places = 1;
-				const ResultTable table = get_result_table(lresults);
+				const ResultTable table = get_result_table(lresults, time_mode);
 
 				printf("%*s %-*s %-*s %-*s %-*s\n",
 					name_col_len, "",
-					table.max_median_len, "median [ms]",
-					table.max_mean_len, "mean [ms]",
-					table.max_worst_len, "worst [ms]",
-					table.max_stddev_len, "std dev [%]"
+					table.max_median_len, get_united_str("median").c_str(),
+					table.max_mean_len, get_united_str("mean").c_str(),
+					table.max_worst_len, get_united_str("worst").c_str(),
+					table.max_stddev_len, "std dev[%]"
 				);
 				for (int i = 0; i < lresults.size(); ++i) {
 					const ZoneResult& result = lresults[i];
@@ -391,8 +409,8 @@ namespace dt {
       }
       else if (dt_state.status == Status::Evaluating) {
          results = details::get_results(dt_state.zones);
-			if(config.report_mode == ReportMode::ConsoleOut)
-				details::printing::print_results(results);
+			if(config.report_out_mode == ReportOutMode::ConsoleOut)
+				details::printing::print_results(results, config.report_time_mode);
 			if(config.done_cb != nullptr)
 				config.done_cb(results);
          dt_state.status = Status::Ready;
@@ -452,9 +470,14 @@ namespace dt {
 	}
 
 
-   inline auto set_report_mode(const ReportMode report_mode) -> void {
-		config.report_mode = report_mode;
+   inline auto set_report_out_mode(const ReportOutMode report_out_mode) -> void {
+		config.report_out_mode = report_out_mode;
    }
+
+
+	inline auto set_report_time_mode(const ReportTimeMode report_time_mode) -> void {
+		config.report_time_mode = report_time_mode;
+	}
 
 
    inline auto set_done_callback(DoneCallback cb) -> void {
