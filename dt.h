@@ -49,7 +49,6 @@ namespace dt {
 	} dt_state;
 
 	typedef void (*DoneCallback)(const Results& results);
-	//typedef void (*GLFWframebuffersizefun)(GLFWwindow*, int, int);
 
 	static struct Config {
 		ReportMode report_mode = ReportMode::ConsoleOut;
