@@ -467,6 +467,11 @@ namespace dt {
 	}
 
 
+	inline auto clear_results() -> void {
+		results.clear();
+	}
+
+
 	inline void start() {
 		if (dt_state.status != Status::Ready) {
 			return;
