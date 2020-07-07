@@ -29,7 +29,7 @@ namespace dt {
 
 	using Results = std::vector<ZoneResult>;
 
-	inline Results results;
+	static Results results;
 
 	enum class Status { GatheringZones, Ready, Starting, Measuring, Evaluating };
 	enum class ReportMode { JustEval, ConsoleOut };
@@ -39,7 +39,7 @@ namespace dt {
 		std::vector<float_type> frame_times;
 	};
 
-	inline struct State {
+	static struct State {
 		Status status = Status::GatheringZones;
 		std::vector<Zone> zones;
 		size_t target_zone = 0;
@@ -51,7 +51,7 @@ namespace dt {
 	typedef void (*DoneCallback)(const Results& results);
 	//typedef void (*GLFWframebuffersizefun)(GLFWwindow*, int, int);
 
-	inline struct Config {
+	static struct Config {
 		ReportMode report_mode = ReportMode::ConsoleOut;
 		int target_sample_count = 10;
 		int warmup_runs = 0;
