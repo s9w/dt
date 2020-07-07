@@ -16,8 +16,6 @@ namespace dt {
 	using float_type = double;
 #endif
 
-	struct ZoneResult;
-
 	struct ZoneResult {
 		std::string name;
 		std::vector<float_type> sorted_times;
