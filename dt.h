@@ -368,7 +368,8 @@ namespace dt {
          dt_state.target_zone = 0;
          dt_state.recorded_slices = 0;
 			dt_state.warmup_runs_left = config.warmup_runs;
-			dt_state.zones[0].frame_times.clear();
+			for (Zone& zone : dt_state.zones)
+				zone.frame_times.clear();
          dt_state.status = Status::Measuring;
       }
       else if (dt_state.status == Status::Measuring) {
