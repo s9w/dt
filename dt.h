@@ -52,8 +52,8 @@ namespace dt {
 
 	static struct Config {
 		ReportMode report_mode = ReportMode::ConsoleOut;
-		int target_sample_count = 10;
-		int warmup_runs = 0;
+		int target_sample_count = 100;
+		int warmup_runs = 10;
 		DoneCallback done_cb = nullptr;
 
 	} config;
