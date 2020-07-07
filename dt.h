@@ -542,6 +542,12 @@ namespace dt {
 		result_str.clear();
 	}
 
+	inline auto factory_reset() -> void {
+		dt_state.zones.clear();
+		dt_state.status = Status::GatheringZones;
+		details::reset_state(dt_state);
+	}
+
 
 	inline void start() {
 		if (dt_state.status != Status::Ready) {

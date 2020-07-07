@@ -78,6 +78,7 @@ You can start new measurements after that. The old results will be cleared then,
 - By default `dt` uses `std::chrono::high_resolution_clock` for time measurement. Alternatively you can supply your own frame times. That is often convenient since realtime applications usually have those available anyways. Also this makes it easier to plugin any higher-performance but less portable alternatives. To do so you'll have to call `dt::slice(floating_point)` and supply it with the time since the last `dt::slice()` in milliseconds.
 - You can define `DT_NO_CHRONO` if you do the above, which will prevent the `<chrono>` include und undefine the parameterless `dt::slice()` function
 - By default `dt` uses doubles. If you prefer floats, just define `DT_FLOATS`. This will set the `float_type`.
+- If you want to define other zones during runtime, you can call `dt::factory_reset()` to clear all zone information. That will not reset the config.
 
 ## todo
 - arbitrary time units? maybe something more graceful than ms
