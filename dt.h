@@ -22,7 +22,7 @@ namespace dt {
 		std::string name;
 		std::vector<float_type> sorted_times;
 		float_type median;
-		float_type average;
+		float_type mean;
 		float_type worst_time;
 		float_type std_dev;
 	};
@@ -106,7 +106,7 @@ namespace dt {
       }
 
 
-		// fun fact: median means average of middle elements for even sizes
+		// fun fact: median means mean of middle elements for even sizes
       [[nodiscard]] auto get_median(std::vector<float_type>& sorted_vec) -> float_type {
          if (sorted_vec.empty()) // ask stupid questions, get stupid answers
             return 0.0;
@@ -122,7 +122,7 @@ namespace dt {
 
 
 		/// std::accumulate would require <numeric>
-      [[nodiscard]] auto get_average(std::vector<float_type>& vec) -> float_type {
+      [[nodiscard]] auto get_mean(std::vector<float_type>& vec) -> float_type {
 			float_type sum = 0.0;
 			for (const float_type value : vec)
 				sum += value;
@@ -135,12 +135,12 @@ namespace dt {
 			std::vector<float_type>& vec,
 			const float_type mean
 		) -> float_type{
-			float_type sigma = 0.0;
+			float_type squares = 0.0;
 			for (const float_type value : vec) {
 				const float_type term = value - mean;
-				sigma += term * term;
+				squares += term * term;
 			}
-			return std::sqrt(sigma / (vec.size() - static_cast<float_type>(1.0)));
+			return std::sqrt(squares / (vec.size() - static_cast<float_type>(1.0)));
 		}
 
 
@@ -152,8 +152,8 @@ namespace dt {
 				zr.sorted_times = zone.frame_times;
 				std::sort(std::begin(zr.sorted_times), std::end(zr.sorted_times));
 				zr.median = get_median(zr.sorted_times);
-				zr.average = get_average(zr.sorted_times);
-				zr.std_dev = get_std_dev(zr.sorted_times, zr.average);
+				zr.mean = get_mean(zr.sorted_times);
+				zr.std_dev = get_std_dev(zr.sorted_times, zr.mean);
 				zr.worst_time = zr.sorted_times.back();
 				local_results.emplace_back(zr);
 			}
@@ -185,7 +185,7 @@ namespace dt {
 			}
 
 
-			enum class EvalType { Median, Average, Worst, RelStdDev };
+			enum class EvalType { Median, Mean, Worst, RelStdDev };
 
 
 			[[nodiscard]] auto get_result_eval(
@@ -196,14 +196,14 @@ namespace dt {
 				case EvalType::Median:
 					return result.median;
 					break;
-				case EvalType::Average:
-					return result.average;
+				case EvalType::Mean:
+					return result.mean;
 					break;
 				case EvalType::Worst:
 					return result.worst_time;
 					break;
 				case EvalType::RelStdDev:
-					return result.std_dev / result.average;
+					return result.std_dev / result.mean;
 					break;
 				default:
 					return 0.0;
@@ -289,11 +289,11 @@ namespace dt {
 
 			struct ResultTable {
 				std::vector<std::string> median_cells;
-				std::vector<std::string> average_cells;
+				std::vector<std::string> mean_cells;
 				std::vector<std::string> worst_cells;
 				std::vector<std::string> std_dev_cells;
 				int max_median_len = 3;
-				int max_avg_len = 3;
+				int max_mean_len = 3;
 				int max_worst_len = 3;
 				int max_stddev_len = 3;
 			};
@@ -306,9 +306,9 @@ namespace dt {
 					table.median_cells.emplace_back(median_cell);
 					table.max_median_len = std::max(table.max_median_len, static_cast<int>(median_cell.length()));
 
-					const std::string avg_cell = get_cell_str(lresults, i, EvalType::Average);
-					table.average_cells.emplace_back(avg_cell);
-					table.max_avg_len = std::max(table.max_avg_len, static_cast<int>(avg_cell.length()));
+					const std::string mean_cell = get_cell_str(lresults, i, EvalType::Mean);
+					table.mean_cells.emplace_back(mean_cell);
+					table.max_mean_len = std::max(table.max_mean_len, static_cast<int>(mean_cell.length()));
 
 					const std::string worst_cell = get_cell_str(lresults, i, EvalType::Worst);
 					table.worst_cells.emplace_back(worst_cell);
@@ -333,7 +333,7 @@ namespace dt {
 				printf("%*s %-*s %-*s %-*s %-*s\n",
 					name_col_len, "",
 					table.max_median_len, "median [ms]",
-					table.max_avg_len, "mean [ms]",
+					table.max_mean_len, "mean [ms]",
 					table.max_worst_len, "worst [ms]",
 					table.max_stddev_len, "std dev [%]"
 				);
@@ -345,7 +345,7 @@ namespace dt {
 					name_col += ":";
 					printf("%-*s", name_col_len, name_col.c_str());
 					printf(" %-*s", table.max_median_len, table.median_cells[i].c_str());
-					printf(" %-*s", table.max_avg_len, table.average_cells[i].c_str());
+					printf(" %-*s", table.max_mean_len, table.mean_cells[i].c_str());
 					printf(" %-*s", table.max_worst_len, table.worst_cells[i].c_str());
 					printf(" %-*s", table.max_stddev_len, table.std_dev_cells[i].c_str());
 					printf("\n");
