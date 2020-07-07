@@ -27,7 +27,7 @@ namespace dt {
 
 	using Results = std::vector<ZoneResult>;
 
-	static Results results;
+	inline Results results;
 
 	enum class Status { GatheringZones, Ready, Starting, Measuring, Evaluating };
 	enum class ReportMode { JustEval, ConsoleOut };
@@ -37,7 +37,7 @@ namespace dt {
 		std::vector<float_type> frame_times;
 	};
 
-	static struct State {
+	inline struct State {
 		Status status = Status::GatheringZones;
 		std::vector<Zone> zones;
 		size_t target_zone = 0;
@@ -48,12 +48,11 @@ namespace dt {
 
 	typedef void (*DoneCallback)(const Results& results);
 
-	static struct Config {
+	inline struct Config {
 		ReportMode report_mode = ReportMode::ConsoleOut;
 		int target_sample_count = 100;
 		int warmup_runs = 10;
 		DoneCallback done_cb = nullptr;
-
 	} config;
 
 	namespace details {
@@ -101,6 +100,16 @@ namespace dt {
       [[nodiscard]] inline auto are_all_zones_done(const State& state) -> bool {
 			return state.target_zone >= state.zones.size();
       }
+
+
+		// doesn't touch zone names, status or t0
+		[[nodiscard]] inline auto reset_state(State& state) -> void {
+			state.target_zone = 0;
+			state.recorded_slices = 0;
+			state.warmup_runs_left = config.warmup_runs;
+			for (Zone& zone : state.zones)
+				zone.frame_times.clear();
+		}
 
 
 		// fun fact: median means mean of middle elements for even sizes
@@ -365,11 +374,7 @@ namespace dt {
          return;
       }
       else if (dt_state.status == Status::Starting) {
-         dt_state.target_zone = 0;
-         dt_state.recorded_slices = 0;
-			dt_state.warmup_runs_left = config.warmup_runs;
-			for (Zone& zone : dt_state.zones)
-				zone.frame_times.clear();
+			details::reset_state(dt_state);
          dt_state.status = Status::Measuring;
       }
       else if (dt_state.status == Status::Measuring) {
