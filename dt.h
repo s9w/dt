@@ -29,7 +29,7 @@ namespace dt {
 
 	using Results = std::vector<ZoneResult>;
 
-	Results results;
+	inline Results results;
 
 	enum class Status { GatheringZones, Ready, Starting, Measuring, Evaluating };
 	enum class ReportMode { JustEval, ConsoleOut };
@@ -39,7 +39,7 @@ namespace dt {
 		std::vector<float_type> frame_times;
 	};
 
-	struct State {
+	inline struct State {
 		Status status = Status::GatheringZones;
 		std::vector<Zone> zones;
 		size_t target_zone = 0;
@@ -51,7 +51,7 @@ namespace dt {
 	typedef void (*DoneCallback)(const Results& results);
 	//typedef void (*GLFWframebuffersizefun)(GLFWwindow*, int, int);
 
-	struct Config {
+	inline struct Config {
 		ReportMode report_mode = ReportMode::ConsoleOut;
 		int target_sample_count = 10;
 		int warmup_runs = 0;
@@ -70,7 +70,7 @@ namespace dt {
 		}
 
 
-		[[nodiscard]] auto get_zone_index(
+		[[nodiscard]] inline auto get_zone_index(
 			const std::string& zone_name,
 			const State& state
 		) -> std::ptrdiff_t {
@@ -88,7 +88,7 @@ namespace dt {
 		}
 
 
-      [[nodiscard]] auto is_zone_known(
+      [[nodiscard]] inline auto is_zone_known(
          const std::string& zone_name,
          const State& state
       ) -> bool {
@@ -101,13 +101,13 @@ namespace dt {
 		}
 
 
-      [[nodiscard]] auto are_all_zones_done(const State& state) -> bool {
+      [[nodiscard]] inline auto are_all_zones_done(const State& state) -> bool {
 			return state.target_zone >= state.zones.size();
       }
 
 
 		// fun fact: median means mean of middle elements for even sizes
-      [[nodiscard]] auto get_median(std::vector<float_type>& sorted_vec) -> float_type {
+      [[nodiscard]] inline auto get_median(std::vector<float_type>& sorted_vec) -> float_type {
          if (sorted_vec.empty()) // ask stupid questions, get stupid answers
             return 0.0;
          if (sorted_vec.size() % 2 == 0) { // even size
@@ -122,7 +122,7 @@ namespace dt {
 
 
 		/// std::accumulate would require <numeric>
-      [[nodiscard]] auto get_mean(std::vector<float_type>& vec) -> float_type {
+      [[nodiscard]] inline auto get_mean(std::vector<float_type>& vec) -> float_type {
 			float_type sum = 0.0;
 			for (const float_type value : vec)
 				sum += value;
@@ -131,7 +131,7 @@ namespace dt {
 
 
 		// This is bessel-corrected!
-		[[nodiscard]] auto get_std_dev(
+		[[nodiscard]] inline auto get_std_dev(
 			std::vector<float_type>& vec,
 			const float_type mean
 		) -> float_type{
@@ -144,7 +144,7 @@ namespace dt {
 		}
 
 
-		[[nodiscard]] auto get_results(const std::vector<Zone>& zones) -> Results {
+		[[nodiscard]] inline auto get_results(const std::vector<Zone>& zones) -> Results {
 			Results local_results;
 			for(const Zone& zone : zones){
 				ZoneResult zr;
@@ -161,20 +161,20 @@ namespace dt {
 		}
 
 
-      auto record_slice(State& state, const float_type time_delta_ms) -> void {
+      inline auto record_slice(State& state, const float_type time_delta_ms) -> void {
          state.zones[state.target_zone].frame_times.emplace_back(time_delta_ms);
          ++state.recorded_slices;
       }
 
 
-      auto start_next_zone_measurement(State& state) -> void {
+      inline auto start_next_zone_measurement(State& state) -> void {
          ++state.target_zone;
 			state.recorded_slices = 0;
       }
 
 		namespace printing {
 
-			[[nodiscard]] auto get_max_zone_name_len(const Results& lresults, const int min_len) -> int {
+			[[nodiscard]] auto inline get_max_zone_name_len(const Results& lresults, const int min_len) -> int {
 				int max_name_len = min_len;
 				for (const ZoneResult& result : lresults) {
 					const int len = static_cast<int>(result.name.length());
@@ -219,7 +219,7 @@ namespace dt {
 			}
 
 
-			[[nodiscard]] auto get_fractional_string(
+			[[nodiscard]] inline auto get_fractional_string(
 				const float_type num,
 				const int digits
 			) -> std::string {
@@ -233,7 +233,7 @@ namespace dt {
 			}
 
 
-			[[nodiscard]] auto get_num_str(
+			[[nodiscard]] inline auto get_num_str(
 				const float_type num,
 				const int significant_digits,
 				const bool with_sign
@@ -273,7 +273,7 @@ namespace dt {
 			}
 
 
-			[[nodiscard]] auto get_cell_str(
+			[[nodiscard]] inline auto get_cell_str(
 				const Results& lresults,
 				const int i,
 				const EvalType& eval_type
@@ -305,7 +305,7 @@ namespace dt {
 			};
 
 
-			[[nodiscard]] auto get_result_table(const Results& lresults) -> ResultTable {
+			[[nodiscard]] inline auto get_result_table(const Results& lresults) -> ResultTable {
 				ResultTable table;
 				for (int i = 0; i < lresults.size(); ++i) {
 					const std::string median_cell = get_cell_str(lresults, i, EvalType::Median);
@@ -328,7 +328,7 @@ namespace dt {
 			}
 
 
-			auto print_results(const Results& lresults) -> void {
+			inline auto print_results(const Results& lresults) -> void {
 				const char* wo_prefix = "w/o ";
 				int name_col_len = get_max_zone_name_len(lresults, 3);
 				name_col_len += static_cast<int>(strlen(wo_prefix));
@@ -363,7 +363,7 @@ namespace dt {
 	} // namespace details
 
 
-   void slice(const float_type time_delta_ms) {
+   inline void slice(const float_type time_delta_ms) {
       if (dt_state.status == Status::GatheringZones || dt_state.status == Status::Ready) {
          return;
       }
@@ -398,7 +398,7 @@ namespace dt {
 
 
 #ifndef DT_NO_CHRONO
-	void slice() {
+	inline void slice() {
 		float_type time_delta_ms = 0.0;
 		if (dt_state.status == Status::Starting) {
 			dt_state.t0 = std::chrono::high_resolution_clock::now();
@@ -413,7 +413,7 @@ namespace dt {
 #endif // DT_NO_CHRONO
 
 
-	bool zone(const std::string& zone_name) {
+	inline bool zone(const std::string& zone_name) {
 		if (dt_state.status == Status::GatheringZones) {
 			if (dt_state.zones.empty()) { // init the 'null zone' 
 				dt_state.zones.emplace_back();
@@ -439,32 +439,32 @@ namespace dt {
 	}
 
 
-	auto set_sample_count(const int sample_count) -> void {
+	inline auto set_sample_count(const int sample_count) -> void {
 		config.target_sample_count = sample_count;
 	}
 
 
-	auto set_warmup_runs(const int warmup_runs) -> void {
+	inline auto set_warmup_runs(const int warmup_runs) -> void {
 		config.warmup_runs = warmup_runs;
 	}
 
 
-   auto set_report_mode(const ReportMode report_mode) -> void {
+   inline auto set_report_mode(const ReportMode report_mode) -> void {
 		config.report_mode = report_mode;
    }
 
 
-   auto set_done_callback(DoneCallback cb) -> void {
+   inline auto set_done_callback(DoneCallback cb) -> void {
 		config.done_cb = cb;
    }
 
 
-	auto are_results_ready() -> bool {
+	inline auto are_results_ready() -> bool {
 		return dt_state.status == Status::Ready && dt_state.recorded_slices > 0;
 	}
 
 
-	void start() {
+	inline void start() {
 		if (dt_state.status != Status::Ready) {
 			return;
 		}
