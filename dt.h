@@ -26,8 +26,8 @@ namespace dt {
 	};
 
 	using Results = std::vector<ZoneResult>;
-
 	inline Results results;
+	inline std::string result_str;
 
 	enum class Status { GatheringZones, Ready, Starting, Measuring, Evaluating };
 	enum class ReportOutMode { JustEval, ConsoleOut };
@@ -349,37 +349,83 @@ namespace dt {
 			}
 
 
-			inline auto print_results(
-				const Results& lresults,
-				const ReportTimeMode time_mode
-			) -> void {
-				const char* wo_prefix = "w/o ";
-				int name_col_len = get_max_zone_name_len(lresults, 3);
-				name_col_len += static_cast<int>(strlen(wo_prefix));
-				name_col_len += 1; // for :
-				constexpr int decimal_places = 1;
-				const ResultTable table = get_result_table(lresults, time_mode);
-
-				printf("%*s %-*s %-*s %-*s %-*s\n",
+			inline auto header_print(
+				char* buffer,
+				const size_t buffer_len,
+				const int name_col_len,
+				const ResultTable& table
+			) -> int {
+				return snprintf(
+					buffer,
+					buffer_len,
+					"%*s %-*s %-*s %-*s %-*s\n",
 					name_col_len, "",
 					table.max_median_len, get_united_str("median").c_str(),
 					table.max_mean_len, get_united_str("mean").c_str(),
 					table.max_worst_len, get_united_str("worst").c_str(),
 					table.max_stddev_len, "std dev[%]"
 				);
+			}
+
+
+			inline auto row_print(
+				char* buffer,
+				const size_t buffer_len,
+				const int name_col_len,
+				const std::string& name_col,
+				const ResultTable& table,
+				const int i
+			) -> int {
+				return snprintf(
+					buffer,
+					buffer_len,
+					"%-*s %-*s %-*s %-*s %-*s\n", 
+					name_col_len,
+					name_col.c_str(),
+					table.max_median_len, table.median_cells[i].c_str(),
+					table.max_mean_len, table.mean_cells[i].c_str(),
+					table.max_worst_len, table.worst_cells[i].c_str(),
+					table.max_stddev_len, table.std_dev_cells[i].c_str()
+				);
+			}
+
+
+			inline auto get_result_str(
+				const Results& lresults,
+				const ReportTimeMode time_mode
+			) -> std::string {
+				const char* wo_prefix = "w/o ";
+				int name_col_len = get_max_zone_name_len(lresults, 3);
+				name_col_len += static_cast<int>(strlen(wo_prefix));
+				name_col_len += 1; // for colon
+				constexpr int decimal_places = 1;
+				const ResultTable table = get_result_table(lresults, time_mode);
+
+				std::string output_str;
+				{
+					const int header_buf_len = header_print(nullptr, 0, name_col_len, table);
+					output_str.resize(header_buf_len + 1);
+				}
+				
+				header_print(output_str.data(), output_str.size(), name_col_len, table);
+				output_str.pop_back(); // remove null terminator
+
 				for (int i = 0; i < lresults.size(); ++i) {
 					const ZoneResult& result = lresults[i];
 					std::string name_col = "all";
 					if (i != 0)
 						name_col = wo_prefix + result.name;
 					name_col += ":";
-					printf("%-*s", name_col_len, name_col.c_str());
-					printf(" %-*s", table.max_median_len, table.median_cells[i].c_str());
-					printf(" %-*s", table.max_mean_len, table.mean_cells[i].c_str());
-					printf(" %-*s", table.max_worst_len, table.worst_cells[i].c_str());
-					printf(" %-*s", table.max_stddev_len, table.std_dev_cells[i].c_str());
-					printf("\n");
+					{
+						const int row_size = row_print(nullptr, 0, name_col_len, name_col, table, i);
+						const size_t old_size = output_str.size();
+						output_str.resize(old_size + row_size + 1);
+						row_print(&output_str[old_size], row_size + 1, name_col_len, name_col, table, i);
+					}
+					output_str.pop_back(); // remove null terminator
 				}
+				output_str.push_back('\0');
+				return output_str;
 			}
 
 		} // namespace printing
@@ -409,8 +455,9 @@ namespace dt {
       }
       else if (dt_state.status == Status::Evaluating) {
          results = details::get_results(dt_state.zones);
-			if(config.report_out_mode == ReportOutMode::ConsoleOut)
-				details::printing::print_results(results, config.report_time_mode);
+			result_str = details::printing::get_result_str(results, config.report_time_mode);
+			if (config.report_out_mode == ReportOutMode::ConsoleOut)
+				printf("%s", result_str.c_str());
 			if(config.done_cb != nullptr)
 				config.done_cb(results);
          dt_state.status = Status::Ready;
@@ -492,6 +539,7 @@ namespace dt {
 
 	inline auto clear_results() -> void {
 		results.clear();
+		result_str.clear();
 	}
 
 
