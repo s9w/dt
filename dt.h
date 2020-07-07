@@ -185,10 +185,10 @@ namespace dt {
 			}
 
 
-			enum class EvalType { Median, Mean, Worst, RelStdDev };
+			enum class EvalType { Median, Mean, Worst, StdDev };
 
 
-			[[nodiscard]] auto get_result_eval(
+			[[nodiscard]] constexpr auto get_result_eval(
 				const ZoneResult& result,
 				const EvalType& eval_type
 			) -> float_type {
@@ -202,8 +202,8 @@ namespace dt {
 				case EvalType::Worst:
 					return result.worst_time;
 					break;
-				case EvalType::RelStdDev:
-					return result.std_dev / result.mean;
+				case EvalType::StdDev:
+					return result.std_dev;
 					break;
 				default:
 					return 0.0;
@@ -212,7 +212,7 @@ namespace dt {
 
 
 			template<class T>
-			[[nodiscard]] auto auto_get_digits_before_point(const T num) -> int {
+			[[nodiscard]] constexpr auto auto_get_digits_before_point(const T num) -> int {
 				if (std::abs(num) < static_cast<float_type>(1.0))
 					return 0;
 				return std::max(static_cast<int>(std::log10(std::abs(num))) + 1, 0);
@@ -265,25 +265,31 @@ namespace dt {
 			}
 
 
+			[[nodiscard]] constexpr auto get_percentage(
+				const float_type numerator,
+				const float_type denominator
+			) -> float_type {
+				return static_cast<float_type>(100.0) * numerator / denominator;
+			}
+
+
 			[[nodiscard]] auto get_cell_str(
 				const Results& lresults,
 				const int i,
 				const EvalType& eval_type
 			) -> std::string {
-				if (eval_type == EvalType::RelStdDev)
-					return get_num_str(static_cast<float_type>(100.0) * get_result_eval(lresults[i], eval_type), 3, false);
-				std::string change_buffer;
-				if (i != 0) {
-					const float_type baseline = get_result_eval(lresults[0], eval_type);
-					const float_type diff = get_result_eval(lresults[i], eval_type) - baseline;
-					const float_type improv_percent = static_cast<float_type>(100.0) * diff / baseline;
-					change_buffer = "(" + get_num_str(improv_percent, 2, true) + "%)";
-				}
-				std::string str = get_num_str(get_result_eval(lresults[i], eval_type), 3, false);
-            str += " ";
-				if (i != 0)
-					str += change_buffer;
-				return str;
+				const float_type value = get_result_eval(lresults[i], eval_type);
+				if (eval_type == EvalType::StdDev)
+					return get_num_str(get_percentage(value, lresults[i].mean), 3, false);
+				std::string cell_str = get_num_str(value, 3, false);
+				if (i == 0)
+					return cell_str;
+
+				const float_type baseline = get_result_eval(lresults[0], eval_type);
+				const float_type diff = value - baseline;
+				const float_type improv_percent = get_percentage(diff, baseline);
+				cell_str += " (" + get_num_str(improv_percent, 2, true) + "%)";
+				return cell_str;
 			}
 
 
@@ -314,7 +320,7 @@ namespace dt {
 					table.worst_cells.emplace_back(worst_cell);
 					table.max_worst_len = std::max(table.max_worst_len, static_cast<int>(worst_cell.length()));
 
-					const std::string rel_std_dev_cell = get_cell_str(lresults, i, EvalType::RelStdDev);
+					const std::string rel_std_dev_cell = get_cell_str(lresults, i, EvalType::StdDev);
 					table.std_dev_cells.emplace_back(rel_std_dev_cell);
 					table.max_stddev_len = std::max(table.max_stddev_len, static_cast<int>(rel_std_dev_cell.length()));
 				}
