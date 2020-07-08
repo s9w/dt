@@ -14,20 +14,20 @@ There is only the `dt.h` header file. C++17 is required. Basic usage:
 #include "dt.h"
 
 int main() {
-	dt::set_sample_count(10);
-	for (int i = 0; i < 100; ++i) {
-		// All zone names need to be encountered once before starting
-		if (i == 1)
-			dt::start();
+   dt::set_sample_count(10);
+   dt::set_warmup_runs(3);
+   for (int i = 0; i < 100; ++i) {
+      if (i == 1)
+         dt::start();
 
-		if (dt::zone("draw backgroud"))
-			// do something for 5 ms
-		if (dt::zone("draw shadows"))
-			// do something for 3 ms
-		if (dt::zone("draw bunnies"))
-			// do something for 7 ms
-		dt::slice();
-	}
+      if (dt::zone("draw backgroud"))
+         // do something for 5 ms
+      if (dt::zone("draw shadows"))
+         // do something for 3 ms
+      if (dt::zone("draw bunnies"))
+         // do something for 7 ms
+      dt::slice();
+   }
 }
 ```
 Something like this would print
@@ -48,12 +48,12 @@ By default, the results are printed to the console via `printf()`. The console o
 Also the raw results are stored in the `dt::results` object, which is a `std::vector` of this struct (for `float_type`, see below):
 ```c++
 struct ZoneResult {
-	std::string name;
-	std::vector<float_type> sorted_times;
-	float_type median;
-	float_type mean;
-	float_type worst_time;
-	float_type std_dev;
+   std::string name;
+   std::vector<float_type> sorted_times;
+   float_type median;
+   float_type mean;
+   float_type worst_time;
+   float_type std_dev;
 };
 ```
 The `sorted_times` holds the raw frame times in milliseconds. The other floats are derived from that and only for convenience. Technical notes: The `std_dev` is a bessel-corrected standard deviation (square root of variance).
@@ -61,9 +61,9 @@ The `sorted_times` holds the raw frame times in milliseconds. The other floats a
 You can check when the measurements are done and the results are ready with `bool dt::are_results_ready()` or register a callback function like so:
 ```c++
 void result_callback(const std::vector<dt::ZoneResult>& zone_results) {
-	for (const dt::ZoneResult& zone_result : zone_results) {
-		// ...
-	}
+   for (const dt::ZoneResult& zone_result : zone_results) {
+      // ...
+   }
 }
 
 dt::set_done_callback(result_callback);
