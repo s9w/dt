@@ -27,9 +27,10 @@ namespace dt {
       float_type std_dev;
    };
 
-   using Results = std::vector<ZoneResult>;
-   inline Results results;
-   inline std::string result_str;
+   inline struct Results {
+      std::vector<ZoneResult> zone_results;
+      std::string result_str;
+   } results;
 
    enum class Status { Ready, Starting, Measuring };
    enum class ReportOutMode { JustEval, ConsoleOut };
@@ -49,7 +50,7 @@ namespace dt {
       int warmup_runs_left = 0;
    } dt_state;
 
-   typedef void (*DoneCallback)(const Results& results);
+   typedef void (*DoneCallback)(const std::vector<ZoneResult>& zone_results);
 
    inline struct Config {
       ReportOutMode report_out_mode = ReportOutMode::ConsoleOut;
@@ -177,8 +178,8 @@ namespace dt::details {
    }
 
 
-   [[nodiscard]] inline auto get_results(const std::vector<Zone>& zones) -> Results {
-      Results local_results;
+   [[nodiscard]] inline auto get_zone_results(const std::vector<Zone>& zones) -> std::vector<ZoneResult> {
+      std::vector<ZoneResult> zone_results;
       for (const Zone& zone : zones) {
          ZoneResult zr;
          zr.name = zone.name;
@@ -188,9 +189,9 @@ namespace dt::details {
          zr.mean = get_mean(zr.sorted_times);
          zr.std_dev = get_std_dev(zr.sorted_times, zr.mean);
          zr.worst_time = zr.sorted_times.back();
-         local_results.emplace_back(zr);
+         zone_results.emplace_back(zr);
       }
-      return local_results;
+      return zone_results;
    }
 
 
@@ -208,9 +209,12 @@ namespace dt::details {
 
    namespace printing {
 
-      [[nodiscard]] auto inline get_max_zone_name_len(const Results& lresults, const int min_len) -> int {
+      [[nodiscard]] auto inline get_max_zone_name_len(
+         const std::vector<ZoneResult>& zone_results,
+         const int min_len
+      ) -> int {
          int max_name_len = min_len;
-         for (const ZoneResult& result : lresults) {
+         for (const ZoneResult& result : zone_results) {
             const int len = static_cast<int>(result.name.length());
             if (len > max_name_len)
                max_name_len = len;
@@ -339,14 +343,14 @@ namespace dt::details {
 
 
       [[nodiscard]] inline auto get_table_row(
-         const Results& presults,
+         const std::vector<ZoneResult>& zone_results,
          const EvalType eval_type,
          const ReportTimeMode time_mode
       ) -> TableRow {
          TableRow row;
-         row.cells.reserve(presults.size());
-         for (int i = 0; i < presults.size(); ++i) {
-            const std::string cell_str = get_cell_str(presults[i], presults[0], i==0, eval_type, time_mode);
+         row.cells.reserve(zone_results.size());
+         for (int i = 0; i < zone_results.size(); ++i) {
+            const std::string cell_str = get_cell_str(zone_results[i], zone_results[0], i==0, eval_type, time_mode);
             row.max_width = std::max(row.max_width, static_cast<int>(cell_str.length()));
             row.cells.emplace_back(std::move(cell_str));
          }
@@ -355,14 +359,14 @@ namespace dt::details {
 
 
       [[nodiscard]] inline auto get_result_table(
-         const Results& lresults,
+         const std::vector<ZoneResult>& zone_results,
          const ReportTimeMode time_mode
       ) -> ResultTable {
          return {
-            get_table_row(lresults, EvalType::Median, time_mode),
-            get_table_row(lresults, EvalType::Mean, time_mode),
-            get_table_row(lresults, EvalType::Worst, time_mode),
-            get_table_row(lresults, EvalType::StdDev, time_mode)
+            get_table_row(zone_results, EvalType::Median, time_mode),
+            get_table_row(zone_results, EvalType::Mean, time_mode),
+            get_table_row(zone_results, EvalType::Worst, time_mode),
+            get_table_row(zone_results, EvalType::StdDev, time_mode)
          };
       }
 
@@ -423,15 +427,15 @@ namespace dt::details {
 
 
       inline auto get_result_str(
-         const Results& lresults,
+         const std::vector<ZoneResult>& zone_results,
          const Config& pconfig
       ) -> std::string {
          const char* wo_prefix = "w/o ";
-         int name_col_len = get_max_zone_name_len(lresults, 3);
+         int name_col_len = get_max_zone_name_len(zone_results, 3);
          name_col_len += static_cast<int>(strlen(wo_prefix));
          name_col_len += 1; // for colon
          constexpr int decimal_places = 1;
-         const ResultTable table = get_result_table(lresults, pconfig.report_time_mode);
+         const ResultTable table = get_result_table(zone_results, pconfig.report_time_mode);
 
          std::string output_str;
          {
@@ -442,8 +446,8 @@ namespace dt::details {
          header_print(&output_str.front(), output_str.size(), name_col_len, table, pconfig);
          output_str.pop_back(); // remove null terminator
 
-         for (int i = 0; i < lresults.size(); ++i) {
-            const ZoneResult& result = lresults[i];
+         for (int i = 0; i < zone_results.size(); ++i) {
+            const ZoneResult& result = zone_results[i];
             std::string name_col = "all";
             if (i != 0)
                name_col = wo_prefix + result.name;
@@ -465,17 +469,15 @@ namespace dt::details {
 
    inline auto evaluate(
       Results& presults,
-      std::string& presult_str,
       const Config& pconfig,
-      State& pstate
+      const State& pstate
    ) -> void {
-      presults = get_results(pstate.zones);
-      presult_str = printing::get_result_str(presults, pconfig);
+      presults.zone_results = get_zone_results(pstate.zones);
+      presults.result_str = printing::get_result_str(presults.zone_results, pconfig);
       if (pconfig.report_out_mode == ReportOutMode::ConsoleOut)
-         printf("%s", presult_str.c_str());
+         printf("%s", presults.result_str.c_str());
       if (pconfig.done_cb != nullptr)
-         pconfig.done_cb(results);
-      pstate.status = Status::Ready;
+         pconfig.done_cb(results.zone_results);
    }
 
 } // namespace dt::details
@@ -524,8 +526,10 @@ inline void dt::slice(const float_type time_delta_ms) {
       details::record_slice(dt_state, time_delta_ms);
       if (details::is_sample_target_reached(dt_state, config)) {
          details::start_next_zone_measurement(dt_state);
-         if (details::are_all_zones_done(dt_state))
-            details::evaluate(results, result_str, config, dt_state);
+         if (details::are_all_zones_done(dt_state)) {
+            details::evaluate(results, config, dt_state);
+            dt_state.status = Status::Ready;
+         }
       }
    }
 }
@@ -579,8 +583,8 @@ inline auto dt::are_results_ready() -> bool {
 
 
 inline auto dt::clear_results() -> void {
-   results.clear();
-   result_str.clear();
+   results.zone_results.clear();
+   results.result_str.clear();
 }
 
 

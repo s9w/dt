@@ -60,8 +60,8 @@ The `sorted_times` holds the raw frame times in milliseconds. The other floats a
 
 You can check when the measurements are done and the results are ready with `bool dt::are_results_ready()` or register a callback function like so:
 ```c++
-void result_callback(const dt::Results& results) {
-	for (const dt::ZoneResult& zone_result : results) {
+void result_callback(const std::vector<dt::ZoneResult>& zone_results) {
+	for (const dt::ZoneResult& zone_result : zone_results) {
 		// ...
 	}
 }

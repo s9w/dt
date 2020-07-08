@@ -76,12 +76,12 @@ TEST_CASE("get_num_str()") {
 
 TEST_CASE("factory_reset()") {
 	bool callback_called = false;
-	auto cb = [](const dt::Results&) {};
+	auto cb = [](const std::vector<dt::ZoneResult>&) {};
 	dt::set_done_callback(cb);
 	dt::zone("one");
 	dt::factory_reset();
 	CHECK(dt::dt_state.zones.empty());
-	CHECK_EQ(dt::dt_state.status, dt::Status::GatheringZones);
+	CHECK_EQ(dt::dt_state.status, dt::Status::Ready);
 }
 
 
@@ -98,8 +98,8 @@ void accurate_sleep(const int ms) {
 }
 
 
-void result_callback(const dt::Results& results) {
-	for (const dt::ZoneResult& zone_result : results) {
+void result_callback(const std::vector<dt::ZoneResult>& zone_results) {
+	for (const dt::ZoneResult& zone_result : zone_results) {
 		// ...
 	}
 }
