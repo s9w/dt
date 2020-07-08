@@ -9,7 +9,9 @@
 #include <chrono>
 #endif // DT_NO_CHRONO
 
+
 namespace dt {
+
 #ifdef DT_FLOATS
    using float_type = float;
 #else
@@ -203,6 +205,7 @@ namespace dt::details {
       state.recorded_slices = 0;
    }
 
+
    namespace printing {
 
       [[nodiscard]] auto inline get_max_zone_name_len(const Results& lresults, const int min_len) -> int {
@@ -304,19 +307,20 @@ namespace dt::details {
 
 
       [[nodiscard]] inline auto get_cell_str(
-         const Results& lresults,
-         const int i,
+         const ZoneResult& result, 
+         const ZoneResult& baseline_result,
+         const bool is_null_zone,
          const EvalType& eval_type,
          const ReportTimeMode time_mode
       ) -> std::string {
-         const float_type value = get_result_eval(lresults[i], eval_type, time_mode);
+         const float_type value = get_result_eval(result, eval_type, time_mode);
          if (eval_type == EvalType::StdDev)
-            return get_num_str(get_percentage(value, lresults[i].mean), 3, false);
+            return get_num_str(get_percentage(value, result.mean), 3, false);
          std::string cell_str = get_num_str(value, 3, false);
-         if (i == 0)
+         if (is_null_zone)
             return cell_str;
 
-         const float_type baseline = get_result_eval(lresults[0], eval_type, time_mode);
+         const float_type baseline = get_result_eval(baseline_result, eval_type, time_mode);
          const float_type diff = value - baseline;
          const float_type improv_percent = get_percentage(diff, baseline);
          cell_str += " (" + get_num_str(improv_percent, 2, true) + "%)";
@@ -324,41 +328,42 @@ namespace dt::details {
       }
 
 
-      struct ResultTable {
-         std::vector<std::string> median_cells;
-         std::vector<std::string> mean_cells;
-         std::vector<std::string> worst_cells;
-         std::vector<std::string> std_dev_cells;
-         int max_median_len = 3;
-         int max_mean_len = 3;
-         int max_worst_len = 3;
-         int max_stddev_len = 3;
+      struct TableRow {
+         std::vector<std::string> cells;
+         int max_width = 3;
       };
+
+      struct ResultTable {
+         TableRow median, mean, worst, std_dev;
+      };
+
+
+      [[nodiscard]] inline auto get_table_row(
+         const Results& presults,
+         const EvalType eval_type,
+         const ReportTimeMode time_mode
+      ) -> TableRow {
+         TableRow row;
+         row.cells.reserve(presults.size());
+         for (int i = 0; i < presults.size(); ++i) {
+            const std::string cell_str = get_cell_str(presults[i], presults[0], i==0, eval_type, time_mode);
+            row.max_width = std::max(row.max_width, static_cast<int>(cell_str.length()));
+            row.cells.emplace_back(std::move(cell_str));
+         }
+         return row;
+      }
 
 
       [[nodiscard]] inline auto get_result_table(
          const Results& lresults,
          const ReportTimeMode time_mode
       ) -> ResultTable {
-         ResultTable table;
-         for (int i = 0; i < lresults.size(); ++i) {
-            const std::string median_cell = get_cell_str(lresults, i, EvalType::Median, time_mode);
-            table.median_cells.emplace_back(median_cell);
-            table.max_median_len = std::max(table.max_median_len, static_cast<int>(median_cell.length()));
-
-            const std::string mean_cell = get_cell_str(lresults, i, EvalType::Mean, time_mode);
-            table.mean_cells.emplace_back(mean_cell);
-            table.max_mean_len = std::max(table.max_mean_len, static_cast<int>(mean_cell.length()));
-
-            const std::string worst_cell = get_cell_str(lresults, i, EvalType::Worst, time_mode);
-            table.worst_cells.emplace_back(worst_cell);
-            table.max_worst_len = std::max(table.max_worst_len, static_cast<int>(worst_cell.length()));
-
-            const std::string rel_std_dev_cell = get_cell_str(lresults, i, EvalType::StdDev, time_mode);
-            table.std_dev_cells.emplace_back(rel_std_dev_cell);
-            table.max_stddev_len = std::max(table.max_stddev_len, static_cast<int>(rel_std_dev_cell.length()));
-         }
-         return table;
+         return {
+            get_table_row(lresults, EvalType::Median, time_mode),
+            get_table_row(lresults, EvalType::Mean, time_mode),
+            get_table_row(lresults, EvalType::Worst, time_mode),
+            get_table_row(lresults, EvalType::StdDev, time_mode)
+         };
       }
 
 
@@ -387,10 +392,10 @@ namespace dt::details {
             buffer_len,
             "%*s %-*s %-*s %-*s %-*s\n",
             name_col_len, "",
-            table.max_median_len, get_united_str("median", pconfig).c_str(),
-            table.max_mean_len, get_united_str("mean", pconfig).c_str(),
-            table.max_worst_len, get_united_str("worst", pconfig).c_str(),
-            table.max_stddev_len, "std dev[%]"
+            table.median.max_width, get_united_str("median", pconfig).c_str(),
+            table.mean.max_width, get_united_str("mean", pconfig).c_str(),
+            table.worst.max_width, get_united_str("worst", pconfig).c_str(),
+            table.std_dev.max_width, "std dev[%]"
          );
       }
 
@@ -409,10 +414,10 @@ namespace dt::details {
             "%-*s %-*s %-*s %-*s %-*s\n",
             name_col_len,
             name_col.c_str(),
-            table.max_median_len, table.median_cells[i].c_str(),
-            table.max_mean_len, table.mean_cells[i].c_str(),
-            table.max_worst_len, table.worst_cells[i].c_str(),
-            table.max_stddev_len, table.std_dev_cells[i].c_str()
+            table.median.max_width, table.median.cells[i].c_str(),
+            table.mean.max_width, table.mean.cells[i].c_str(),
+            table.worst.max_width, table.worst.cells[i].c_str(),
+            table.std_dev.max_width, table.std_dev.cells[i].c_str()
          );
       }
 
@@ -477,15 +482,15 @@ namespace dt::details {
 
 
 inline bool dt::zone(const std::string& zone_name) {
-      if (dt_state.zones.empty()) { // init the 'null zone' 
-         dt_state.zones.emplace_back();
-         dt_state.zones.back().frame_times.reserve(config.target_sample_count);
-      }
+   if (dt_state.zones.empty()) { // init the 'null zone' 
+      dt_state.zones.emplace_back();
+      dt_state.zones.back().frame_times.reserve(config.target_sample_count);
+   }
 
    if (!details::is_zone_known(zone_name, dt_state)) {
-         dt_state.zones.push_back({ zone_name, {} });
-         dt_state.zones.back().frame_times.reserve(config.target_sample_count);
-      }
+      dt_state.zones.push_back({ zone_name, {} });
+      dt_state.zones.back().frame_times.reserve(config.target_sample_count);
+   }
    
    if (dt_state.status == Status::Measuring) {
       const size_t current_zone = details::get_zone_index(zone_name, dt_state);
@@ -524,7 +529,6 @@ inline void dt::slice(const float_type time_delta_ms) {
          if (details::are_all_zones_done(dt_state))
             details::evaluate(results, result_str, config, dt_state);
       }
-   }
    }
 }
 
