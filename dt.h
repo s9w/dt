@@ -60,11 +60,11 @@ namespace dt {
    } config;
 
 
-   inline bool zone(const std::string& zone_name);
-   inline void start();
-   inline void slice(const float_type time_delta_ms);
+   inline auto zone(const std::string& zone_name) -> bool;
+   inline auto start() -> void;
+   inline auto slice(const float_type time_delta_ms) -> void;
 #ifndef DT_NO_CHRONO
-   inline void slice();
+   inline auto slice() -> void;
 #endif // DT_NO_CHRONO
 
    inline auto set_sample_count(const int sample_count) -> void;
@@ -503,10 +503,8 @@ inline bool dt::zone(const std::string& zone_name) {
 
 
 inline void dt::start() {
-   if (dt_state.status != Status::Ready) {
-      return;
-   }
-   dt_state.status = Status::Starting; // Wait until the next slice for timing
+   if (dt_state.status == Status::Ready)
+      dt_state.status = Status::Starting;
 }
 
 
