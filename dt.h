@@ -29,7 +29,7 @@ namespace dt {
    inline Results results;
    inline std::string result_str;
 
-   enum class Status { GatheringZones, Ready, Starting, Measuring, Evaluating };
+   enum class Status { Ready, Starting, Measuring };
    enum class ReportOutMode { JustEval, ConsoleOut };
    enum class ReportTimeMode { Ms, Fps };
 
@@ -39,7 +39,7 @@ namespace dt {
    };
 
    inline struct State {
-      Status status = Status::GatheringZones;
+      Status status = Status::Ready;
       std::vector<Zone> zones;
       size_t target_zone = 0;
       std::chrono::high_resolution_clock::time_point t0;
@@ -457,26 +457,37 @@ namespace dt::details {
 
    } // namespace printing
 
+
+   inline auto evaluate(
+      Results& presults,
+      std::string& presult_str,
+      const Config& pconfig,
+      State& pstate
+   ) -> void {
+      presults = get_results(pstate.zones);
+      presult_str = printing::get_result_str(presults, pconfig);
+      if (pconfig.report_out_mode == ReportOutMode::ConsoleOut)
+         printf("%s", presult_str.c_str());
+      if (pconfig.done_cb != nullptr)
+         pconfig.done_cb(results);
+      pstate.status = Status::Ready;
+   }
+
 } // namespace dt::details
 
 
 inline bool dt::zone(const std::string& zone_name) {
-   if (dt_state.status == Status::GatheringZones) {
       if (dt_state.zones.empty()) { // init the 'null zone' 
          dt_state.zones.emplace_back();
          dt_state.zones.back().frame_times.reserve(config.target_sample_count);
       }
 
-      // Encountering the same zone name twice means things can start
-      if (details::is_zone_known(zone_name, dt_state)) {
-         dt_state.status = Status::Ready;
-      }
-      else {
+   if (!details::is_zone_known(zone_name, dt_state)) {
          dt_state.zones.push_back({ zone_name, {} });
          dt_state.zones.back().frame_times.reserve(config.target_sample_count);
       }
-   }
-   else if (dt_state.status == Status::Measuring) {
+   
+   if (dt_state.status == Status::Measuring) {
       const size_t current_zone = details::get_zone_index(zone_name, dt_state);
       if (dt_state.target_zone == 0)
          return true;
@@ -495,7 +506,7 @@ inline void dt::start() {
 
 
 inline void dt::slice(const float_type time_delta_ms) {
-   if (dt_state.status == Status::GatheringZones || dt_state.status == Status::Ready) {
+   if (dt_state.status == Status::Ready) {
       return;
    }
    else if (dt_state.status == Status::Starting) {
@@ -511,17 +522,9 @@ inline void dt::slice(const float_type time_delta_ms) {
       if (details::is_sample_target_reached(dt_state, config)) {
          details::start_next_zone_measurement(dt_state);
          if (details::are_all_zones_done(dt_state))
-            dt_state.status = Status::Evaluating;
+            details::evaluate(results, result_str, config, dt_state);
       }
    }
-   else if (dt_state.status == Status::Evaluating) {
-      results = details::get_results(dt_state.zones);
-      result_str = details::printing::get_result_str(results, config);
-      if (config.report_out_mode == ReportOutMode::ConsoleOut)
-         printf("%s", result_str.c_str());
-      if (config.done_cb != nullptr)
-         config.done_cb(results);
-      dt_state.status = Status::Ready;
    }
 }
 
@@ -581,6 +584,6 @@ inline auto dt::clear_results() -> void {
 
 inline auto dt::factory_reset() -> void {
    dt_state.zones.clear();
-   dt_state.status = Status::GatheringZones;
+   dt_state.status = Status::Ready;
    details::reset_state(dt_state);
 }
