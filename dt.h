@@ -588,4 +588,5 @@ inline auto dt::factory_reset() -> void {
    dt_state.zones.clear();
    dt_state.status = Status::Ready;
    details::reset_state(dt_state);
+   clear_results();
 }
