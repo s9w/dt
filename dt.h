@@ -114,8 +114,11 @@ namespace dt::details {
    }
 
 
-   [[nodiscard]] constexpr auto is_sample_target_reached(const State& state) -> bool {
-      return state.recorded_slices >= config.target_sample_count;
+   [[nodiscard]] constexpr auto is_sample_target_reached(
+      const State& state,
+      const Config& pconfig
+   ) -> bool {
+      return state.recorded_slices >= pconfig.target_sample_count;
    }
 
 
@@ -359,9 +362,12 @@ namespace dt::details {
       }
 
 
-      inline auto get_united_str(const std::string& description) -> std::string {
+      inline auto get_united_str(
+         const std::string& description,
+         const Config& pconfig
+      ) -> std::string {
          std::string s = description;
-         if (config.report_time_mode == ReportTimeMode::Fps)
+         if (pconfig.report_time_mode == ReportTimeMode::Fps)
             s += "[fps]";
          else
             s += "[ms]";
@@ -373,16 +379,17 @@ namespace dt::details {
          char* buffer,
          const size_t buffer_len,
          const int name_col_len,
-         const ResultTable& table
+         const ResultTable& table,
+         const Config& pconfig
       ) -> int {
          return snprintf(
             buffer,
             buffer_len,
             "%*s %-*s %-*s %-*s %-*s\n",
             name_col_len, "",
-            table.max_median_len, get_united_str("median").c_str(),
-            table.max_mean_len, get_united_str("mean").c_str(),
-            table.max_worst_len, get_united_str("worst").c_str(),
+            table.max_median_len, get_united_str("median", pconfig).c_str(),
+            table.max_mean_len, get_united_str("mean", pconfig).c_str(),
+            table.max_worst_len, get_united_str("worst", pconfig).c_str(),
             table.max_stddev_len, "std dev[%]"
          );
       }
@@ -412,22 +419,22 @@ namespace dt::details {
 
       inline auto get_result_str(
          const Results& lresults,
-         const ReportTimeMode time_mode
+         const Config& pconfig
       ) -> std::string {
          const char* wo_prefix = "w/o ";
          int name_col_len = get_max_zone_name_len(lresults, 3);
          name_col_len += static_cast<int>(strlen(wo_prefix));
          name_col_len += 1; // for colon
          constexpr int decimal_places = 1;
-         const ResultTable table = get_result_table(lresults, time_mode);
+         const ResultTable table = get_result_table(lresults, pconfig.report_time_mode);
 
          std::string output_str;
          {
-            const int header_buf_len = header_print(nullptr, 0, name_col_len, table);
+            const int header_buf_len = header_print(nullptr, 0, name_col_len, table, pconfig);
             output_str.resize(header_buf_len + 1);
          }
 
-         header_print(output_str.data(), output_str.size(), name_col_len, table);
+         header_print(&output_str.front(), output_str.size(), name_col_len, table, pconfig);
          output_str.pop_back(); // remove null terminator
 
          for (int i = 0; i < lresults.size(); ++i) {
@@ -501,7 +508,7 @@ inline void dt::slice(const float_type time_delta_ms) {
          return;
       }
       details::record_slice(dt_state, time_delta_ms);
-      if (details::is_sample_target_reached(dt_state)) {
+      if (details::is_sample_target_reached(dt_state, config)) {
          details::start_next_zone_measurement(dt_state);
          if (details::are_all_zones_done(dt_state))
             dt_state.status = Status::Evaluating;
@@ -509,7 +516,7 @@ inline void dt::slice(const float_type time_delta_ms) {
    }
    else if (dt_state.status == Status::Evaluating) {
       results = details::get_results(dt_state.zones);
-      result_str = details::printing::get_result_str(results, config.report_time_mode);
+      result_str = details::printing::get_result_str(results, config);
       if (config.report_out_mode == ReportOutMode::ConsoleOut)
          printf("%s", result_str.c_str());
       if (config.done_cb != nullptr)
