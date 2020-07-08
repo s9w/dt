@@ -373,7 +373,7 @@ namespace dt::details {
       ) -> std::string {
          std::string s = description;
          if (pconfig.report_time_mode == ReportTimeMode::Fps)
-            s += "[fps]";
+            s += "[FPS]";
          else
             s += "[ms]";
          return s;
