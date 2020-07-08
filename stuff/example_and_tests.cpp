@@ -5,7 +5,7 @@
 
 #define DOCTEST_CONFIG_IMPLEMENT
 #pragma warning( push, 0 )
-#include "doctest.h"
+#include "doctest/doctest.h"
 #pragma warning( pop )
 
 
