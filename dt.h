@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#define DT_FLOATS
 #ifndef DT_NO_CHRONO
 #include <chrono>
 #endif // DT_NO_CHRONO
@@ -20,8 +21,10 @@ namespace dt {
 
    struct ZoneResult {
       std::string name;
-      std::vector<float_type> sorted_times;
+      std::vector<float_type> sorted_frame_times;
+      std::vector<float_type> sorted_zone_times;
       float_type median;
+      float_type zonetime_median;
       float_type mean;
       float_type worst_time;
       float_type std_dev;
@@ -39,7 +42,10 @@ namespace dt {
    struct Zone {
       std::string name;
       std::vector<float_type> frame_times;
+      std::vector<float_type> zone_times;
+      float_type zone_buffer = static_cast<float_type>(0.0);
    };
+
 
    inline struct State {
       Status status = Status::Ready;
@@ -60,8 +66,12 @@ namespace dt {
       DoneCallback done_cb = nullptr;
    } config;
 
+   namespace details {
+      struct ZoneGuard;
+   }
 
    inline auto zone(const std::string& zone_name) -> bool;
+   inline auto timezone(const std::string& zone_name) -> details::ZoneGuard;
    inline auto start() -> void;
    inline auto slice(const float_type time_delta_ms) -> void;
 #ifndef DT_NO_CHRONO
@@ -89,6 +99,31 @@ namespace dt::details {
       const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count();
       return ns / static_cast<float_type>(1'000'000.0);
    }
+
+
+   struct ZoneGuard {
+      ZoneGuard(const ptrdiff_t zone_index)
+         : m_t0(std::chrono::high_resolution_clock::now())
+         , m_zone_index(zone_index)
+      {}
+      ~ZoneGuard() {
+         if (m_zone_index == -1)
+            return;
+         // only measure during null run
+         if (dt_state.target_zone != 0)
+            return;
+         const auto t1 = std::chrono::high_resolution_clock::now();
+         const float_type ms = details::get_ms_from_dt(t1, m_t0);
+         dt_state.zones[m_zone_index].zone_buffer += ms;
+      }
+      operator bool() {
+         if (dt_state.target_zone == 0)
+            return true;
+         return static_cast<size_t>(m_zone_index) != dt_state.target_zone;
+      }
+      std::chrono::high_resolution_clock::time_point m_t0;
+      const ptrdiff_t m_zone_index;
+   };
 
 
    [[nodiscard]] inline auto get_zone_index(
@@ -183,12 +218,17 @@ namespace dt::details {
       for (const Zone& zone : zones) {
          ZoneResult zr;
          zr.name = zone.name;
-         zr.sorted_times = zone.frame_times;
-         std::sort(std::begin(zr.sorted_times), std::end(zr.sorted_times));
-         zr.median = get_median(zr.sorted_times);
-         zr.mean = get_mean(zr.sorted_times);
-         zr.std_dev = get_std_dev(zr.sorted_times, zr.mean);
-         zr.worst_time = zr.sorted_times.back();
+
+         zr.sorted_frame_times = zone.frame_times;
+         std::sort(std::begin(zr.sorted_frame_times), std::end(zr.sorted_frame_times));
+         zr.sorted_zone_times = zone.zone_times;
+         std::sort(std::begin(zr.sorted_zone_times), std::end(zr.sorted_zone_times));
+
+         zr.median = get_median(zr.sorted_frame_times);
+         zr.zonetime_median = get_median(zr.sorted_zone_times);
+         zr.mean = get_mean(zr.sorted_frame_times);
+         zr.std_dev = get_std_dev(zr.sorted_frame_times, zr.mean);
+         zr.worst_time = zr.sorted_frame_times.back();
          zone_results.emplace_back(zr);
       }
       return zone_results;
@@ -197,6 +237,10 @@ namespace dt::details {
 
    inline auto record_slice(State& state, const float_type time_delta_ms) -> void {
       state.zones[state.target_zone].frame_times.emplace_back(time_delta_ms);
+      for (Zone& zone : state.zones) {
+         if (zone.zone_buffer > 0)
+            zone.zone_times.emplace_back(zone.zone_buffer);
+      }
       ++state.recorded_slices;
    }
 
@@ -223,7 +267,7 @@ namespace dt::details {
       }
 
 
-      enum class EvalType { Median, Mean, Worst, StdDev };
+      enum class EvalType { Median, Mean, Worst, StdDev, ZonetimeMedian };
 
 
       [[nodiscard]] constexpr auto get_result_eval(
@@ -236,6 +280,8 @@ namespace dt::details {
          float_type ms_value = static_cast<float_type>(0.0);
          if (eval_type == EvalType::Median)
             ms_value = result.median;
+         else if (eval_type == EvalType::ZonetimeMedian)
+            ms_value = result.zonetime_median;
          else if (eval_type == EvalType::Mean)
             ms_value = result.mean;
          else if (eval_type == EvalType::Worst)
@@ -320,6 +366,11 @@ namespace dt::details {
          const float_type value = get_result_eval(result, eval_type, time_mode);
          if (eval_type == EvalType::StdDev)
             return get_num_str(get_percentage(value, result.mean), 3, false);
+         else if (eval_type == EvalType::ZonetimeMedian) {
+            if(value>0)
+               return get_num_str(value, 3, false);
+            return "";
+         }
          std::string cell_str = get_num_str(value, 3, false);
          if (is_null_zone)
             return cell_str;
@@ -338,7 +389,7 @@ namespace dt::details {
       };
 
       struct ResultTable {
-         TableRow median, mean, worst, std_dev;
+         TableRow median, mean, worst, std_dev, zonetime_median;
       };
 
 
@@ -366,7 +417,8 @@ namespace dt::details {
             get_table_row(zone_results, EvalType::Median, time_mode),
             get_table_row(zone_results, EvalType::Mean, time_mode),
             get_table_row(zone_results, EvalType::Worst, time_mode),
-            get_table_row(zone_results, EvalType::StdDev, time_mode)
+            get_table_row(zone_results, EvalType::StdDev, time_mode),
+            get_table_row(zone_results, EvalType::ZonetimeMedian, time_mode)
          };
       }
 
@@ -394,12 +446,13 @@ namespace dt::details {
          return snprintf(
             buffer,
             buffer_len,
-            "%*s %-*s %-*s %-*s %-*s\n",
+            "%*s %-*s %-*s %-*s %-*s %-*s\n",
             name_col_len, "",
             table.median.max_width, get_united_str("median", pconfig).c_str(),
             table.mean.max_width, get_united_str("mean", pconfig).c_str(),
             table.worst.max_width, get_united_str("worst", pconfig).c_str(),
-            table.std_dev.max_width, "std dev[%]"
+            table.std_dev.max_width, "std dev[%]",
+            table.zonetime_median.max_width, "ztm"
          );
       }
 
@@ -415,13 +468,14 @@ namespace dt::details {
          return snprintf(
             buffer,
             buffer_len,
-            "%-*s %-*s %-*s %-*s %-*s\n",
+            "%-*s %-*s %-*s %-*s %-*s %-*s\n",
             name_col_len,
             name_col.c_str(),
             table.median.max_width, table.median.cells[i].c_str(),
             table.mean.max_width, table.mean.cells[i].c_str(),
             table.worst.max_width, table.worst.cells[i].c_str(),
-            table.std_dev.max_width, table.std_dev.cells[i].c_str()
+            table.std_dev.max_width, table.std_dev.cells[i].c_str(),
+            table.zonetime_median.max_width, table.zonetime_median.cells[i].c_str()
          );
       }
 
@@ -467,6 +521,17 @@ namespace dt::details {
    } // namespace printing
 
 
+   inline auto ensure_null_zone(
+      State& state,
+      const Config& pconfig
+   ) -> void {
+		if (state.zones.empty()) {
+         state.zones.emplace_back();
+         state.zones.back().frame_times.reserve(pconfig.target_sample_count);
+		}
+   }
+
+
    inline auto evaluate(
       Results& presults,
       const Config& pconfig,
@@ -476,6 +541,7 @@ namespace dt::details {
       presults.result_str = printing::get_result_str(presults.zone_results, pconfig);
       if (pconfig.report_out_mode == ReportOutMode::ConsoleOut)
          printf("%s", presults.result_str.c_str());
+
       if (pconfig.done_cb != nullptr)
          pconfig.done_cb(results.zone_results);
    }
@@ -484,10 +550,7 @@ namespace dt::details {
 
 
 inline bool dt::zone(const std::string& zone_name) {
-   if (dt_state.zones.empty()) { // init the 'null zone' 
-      dt_state.zones.emplace_back();
-      dt_state.zones.back().frame_times.reserve(config.target_sample_count);
-   }
+   details::ensure_null_zone(dt_state, config);
 
    if (!details::is_zone_known(zone_name, dt_state)) {
       dt_state.zones.push_back({ zone_name, {} });
@@ -501,6 +564,26 @@ inline bool dt::zone(const std::string& zone_name) {
       return current_zone != dt_state.target_zone;
    }
    return true;
+}
+
+
+[[nodiscard]]
+inline auto dt::timezone(const std::string& zone_name) -> details::ZoneGuard {
+   details::ensure_null_zone(dt_state, config);
+
+   if (!details::is_zone_known(zone_name, dt_state)) {
+      dt_state.zones.push_back({ zone_name, {} });
+      dt_state.zones.back().frame_times.reserve(config.target_sample_count);
+   }
+
+   if (dt_state.status == Status::Measuring) {
+      const size_t zone_index = details::get_zone_index(zone_name, dt_state);
+      if (zone_index == 0)
+         return details::ZoneGuard{ -1 };
+      return details::ZoneGuard{ static_cast<ptrdiff_t>(zone_index) };
+   }
+
+   return details::ZoneGuard{ -1 };
 }
 
 
@@ -524,6 +607,8 @@ inline void dt::slice(const float_type time_delta_ms) {
          return;
       }
       details::record_slice(dt_state, time_delta_ms);
+      for (Zone& zone : dt_state.zones)
+         zone.zone_buffer = static_cast<float_type>(0.0);
       if (details::is_sample_target_reached(dt_state, config)) {
          details::start_next_zone_measurement(dt_state);
          if (details::are_all_zones_done(dt_state)) {
