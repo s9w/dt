@@ -308,7 +308,7 @@ namespace dt::details {
       ) -> std::string {
          float_type integral;
          const float_type fractional = std::modf(num, &integral);
-         const float_type x = fractional * std::pow(static_cast<float_type>(10.0), digits);
+         const float_type x = fractional * static_cast<float_type>(std::pow(static_cast<float_type>(10.0), digits));
          const int i = static_cast<int>(std::round(x));
          std::string s = std::to_string(i);
          s.resize(digits, '0');
